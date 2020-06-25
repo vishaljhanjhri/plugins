@@ -126,6 +126,7 @@ typedef enum {
   high,
   veryHigh,
   ultraHigh,
+  photo,
   max,
 } ResolutionPreset;
 
@@ -144,6 +145,8 @@ static ResolutionPreset getResolutionPresetForString(NSString *preset) {
     return ultraHigh;
   } else if ([preset isEqualToString:@"max"]) {
     return max;
+  } else if ([preset isEqualToString:@"photo"]) {
+    return photo;
   } else {
     NSError *error = [NSError errorWithDomain:NSCocoaErrorDomain
                                          code:NSURLErrorUnknown
@@ -274,7 +277,7 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
 
 - (void)captureToFile:(NSString *)path result:(FlutterResult)result {
   AVCapturePhotoSettings *settings = [AVCapturePhotoSettings photoSettings];
-  if (_resolutionPreset == max) {
+  if (_resolutionPreset == max || _resolutionPreset == photo) {
     [settings setHighResolutionPhotoEnabled:YES];
   }
   [_capturePhotoOutput
@@ -325,6 +328,15 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
         _previewSize = CGSizeMake(352, 288);
         break;
       }
+    case photo:
+          if ([_captureSession canSetSessionPreset: AVCaptureSessionPresetPhoto]) {
+            _captureSession.sessionPreset = AVCaptureSessionPresetPhoto;
+            _previewSize =
+                CGSizeMake(_captureDevice.activeFormat.highResolutionStillImageDimensions.width,
+                           _captureDevice.activeFormat.highResolutionStillImageDimensions.height);
+            break;
+          }
+          
     default:
       if ([_captureSession canSetSessionPreset:AVCaptureSessionPresetLow]) {
         _captureSession.sessionPreset = AVCaptureSessionPresetLow;
@@ -865,6 +877,44 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
       });
       [cam start];
     }
+  } else if ([@"setPointOfInterest" isEqualToString:call.method]) {
+    NSNumber *offsetX = call.arguments[@"offsetX"];
+    NSNumber *offsetY = call.arguments[@"offsetY"];
+
+    NSError *error = nil;
+    [_camera.captureDevice lockForConfiguration:&error];
+    if (error) {
+      result(getFlutterError(error));
+    } else {
+      if ([_camera.captureDevice isFocusPointOfInterestSupported]) {
+        _camera.captureDevice.focusPointOfInterest =
+            CGPointMake(offsetX.floatValue, offsetY.floatValue);
+        [_camera.captureDevice setFocusMode:AVCaptureFocusModeContinuousAutoFocus];
+      }
+      if ([_camera.captureDevice isExposurePointOfInterestSupported]) {
+        _camera.captureDevice.exposurePointOfInterest =
+            CGPointMake(offsetX.floatValue,offsetY.floatValue);
+        [_camera.captureDevice setExposureMode:AVCaptureExposureModeContinuousAutoExposure];
+      }
+      [_camera.captureDevice unlockForConfiguration];
+      result(@{});
+    }
+  } else if ([@"startFlash" isEqualToString:call.method]) {
+    AVCaptureDevice *device = _camera.captureDevice;
+    if ([device hasTorch]) {
+        [device lockForConfiguration:nil];
+        [device setTorchMode:AVCaptureTorchModeOn];
+        [device unlockForConfiguration];
+    }
+    result(nil);
+  } else if ([@"stopFlash" isEqualToString:call.method]) {
+    AVCaptureDevice *device = _camera.captureDevice;
+    if ([device hasTorch]) {
+        [device lockForConfiguration:nil];
+        [device setTorchMode:AVCaptureTorchModeOff];
+        [device unlockForConfiguration];
+    }
+    result(nil);
   } else if ([@"startImageStream" isEqualToString:call.method]) {
     [_camera startImageStreamWithMessenger:_messenger];
     result(nil);

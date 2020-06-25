@@ -5,6 +5,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:camera/camer_overlay.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -36,6 +38,9 @@ enum ResolutionPreset {
 
   /// The highest resolution available.
   max,
+
+  /// The photo resolution available.
+  photo
 }
 
 // ignore: inference_failure_on_function_return_type
@@ -56,6 +61,8 @@ String serializeResolutionPreset(ResolutionPreset resolutionPreset) {
       return 'medium';
     case ResolutionPreset.low:
       return 'low';
+    case ResolutionPreset.photo:
+      return 'photo';
   }
   throw ArgumentError('Unknown ResolutionPreset value');
 }
@@ -136,16 +143,138 @@ class CameraException implements Exception {
 }
 
 // Build the UI texture view of the video data with textureId.
-class CameraPreview extends StatelessWidget {
+class CameraPreview extends StatefulWidget {
   const CameraPreview(this.controller);
 
   final CameraController controller;
 
   @override
+  _CameraPreviewState createState() => _CameraPreviewState();
+}
+
+class _CameraPreviewState extends State<CameraPreview> {
+  Offset _focusPoint;
+  Timer _timer;
+  CameraController get _cameraController => widget.controller;
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return controller.value.isInitialized
-        ? Texture(textureId: controller._textureId)
+    return widget.controller.value.isInitialized
+        ? _getCameraPreview(context)
         : Container();
+  }
+
+  Widget _getCameraPreview(BuildContext context) {
+
+    
+    double scale = _cameraController.getPreviewScale(context);
+    var cameraChild = Container(child: Transform.scale(
+      scale: scale,
+      child: Center(
+        child: AspectRatio(
+          aspectRatio: _cameraController.value.aspectRatio,
+          child: Texture(textureId: _cameraController._textureId),
+        ),
+      ),
+    ),);
+
+    
+
+    Widget stack = Stack(
+      fit: StackFit.expand,
+      children: [
+        cameraChild,
+        _getFocusBox(),
+        _getCropViewTopCover(),
+        _getCropView(),
+        _getCropViewBottomCover(),
+      ],
+    );
+
+    return stack;
+  }
+
+  Widget _getCropViewTopCover() {
+    if (_cameraController.overlayConfig == null) {
+      return Container();
+    }
+    CameraOverlayConfig _overlayConfig = _cameraController.overlayConfig;
+
+    return Positioned(
+        top: 0,
+        left: 0,
+        right: 0,
+        height: _overlayConfig.overlayPadding.top,
+        child: Container(color: _overlayConfig.boxBackgroundColor));
+  }
+
+  Widget _getCropViewBottomCover() {
+    if (_cameraController.overlayConfig == null) {
+      return Container();
+    }
+    CameraOverlayConfig _overlayConfig = _cameraController.overlayConfig;
+
+    return Positioned(
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: _overlayConfig.overlayPadding.bottom,
+        child: Container(color: _overlayConfig.boxBackgroundColor));
+  }
+
+  Widget _getCropView() {
+    if (_cameraController.overlayConfig == null) {
+      return Container();
+    }
+    CameraOverlayConfig _overlayConfig = _cameraController.overlayConfig;
+    Widget cropView = CameraOverlay(
+      _cameraController.cameraOverlaykey,
+      tapCallback: _viewTapped,
+      config: _overlayConfig,
+    );
+
+    return cropView; //Positioned(top: 0, left: 0, bottom: 0, right: 0, child: cropView);
+  }
+
+  _viewTapped(Offset touchPoint, Offset scalledPoint) {
+    _cameraController.setPointOfInterest(scalledPoint);
+    _setFocus(touchPoint);
+  }
+
+  Widget _getFocusBox() {
+    double boxWidth = 60;
+    double boxHeight = 60;
+    return _focusPoint == null
+        ? Container()
+        : Positioned(
+            top: _focusPoint.dy - (boxHeight / 2),
+            left: _focusPoint.dx - (boxWidth / 2),
+            child: Container(
+              height: boxHeight,
+              width: boxWidth,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.yellow, width: 1),
+              ),
+            ),
+          );
+  }
+
+  _setFocus(Offset point) {
+    setState(() {
+      this._focusPoint = point;
+    });
+    _timer?.cancel();
+    _timer = Timer(Duration(seconds: 3), () {
+      setState(() {
+        this._focusPoint = null;
+      });
+    });
   }
 }
 
@@ -241,22 +370,26 @@ class CameraValue {
 ///
 /// To show the camera preview on the screen use a [CameraPreview] widget.
 class CameraController extends ValueNotifier<CameraValue> {
-  CameraController(
-    this.description,
-    this.resolutionPreset, {
-    this.enableAudio = true,
-  }) : super(const CameraValue.uninitialized());
+  CameraController(this.description, this.resolutionPreset,
+      {this.enableAudio = true, this.overlayConfig})
+      : super(const CameraValue.uninitialized());
 
   final CameraDescription description;
   final ResolutionPreset resolutionPreset;
+  final GlobalKey<CameraOverlayState> cameraOverlaykey =
+      GlobalKey<CameraOverlayState>();
+  final CameraOverlayConfig overlayConfig;
 
   /// Whether to include audio when recording a video.
   final bool enableAudio;
 
   int _textureId;
   bool _isDisposed = false;
+  double cameraPreviewScale;
+  bool isFlashOn = false;
   StreamSubscription<dynamic> _eventSubscription;
   StreamSubscription<dynamic> _imageStreamSubscription;
+
   Completer<void> _creatingCompleter;
 
   /// Initializes the camera on the device.
@@ -294,6 +427,35 @@ class CameraController extends ValueNotifier<CameraValue> {
             .listen(_listener);
     _creatingCompleter.complete();
     return _creatingCompleter.future;
+  }
+
+  double getPreviewScale(BuildContext context) {
+    if (this.cameraPreviewScale != null) {
+      return cameraPreviewScale;
+    }
+
+    final size = MediaQuery.of(context).size;
+
+    // // calculate scale for aspect ratio widget
+    // var scale = this.value.aspectRatio / size.aspectRatio;
+    // print("---- scale $scale ++++ ${size.aspectRatio}");
+    // // check if adjustments are needed...
+    // if (this.value.aspectRatio < size.aspectRatio) {
+    //   scale = 1 / scale;
+    //   print("xxxxx scale $scale");
+    // }
+    // final deviceRatio = size.width / size.height;
+    double scale = this.value.aspectRatio / size.aspectRatio;
+    this.cameraPreviewScale = scale;
+    // print(" ==== scale $scale");
+    // print("======= size $size");
+    // print("======= deviceRatio $size");
+    return this.cameraPreviewScale;
+  }
+
+  Rect get getCropArea {
+    CameraOverlaySizeResult _areaResult = cameraOverlaykey.currentState.cropArea;
+    return _areaResult?.getRect(this.value.previewSize) ?? Rect.zero;
   }
 
   /// Prepare the capture session for video recording.
@@ -431,12 +593,12 @@ class CameraController extends ValueNotifier<CameraValue> {
         'stopImageStream was called while a video is being recorded.',
       );
     }
-    if (!value.isStreamingImages) {
-      throw CameraException(
-        'No camera is streaming images',
-        'stopImageStream was called when no camera is streaming images.',
-      );
-    }
+    // if (!value.isStreamingImages) {
+    //   throw CameraException(
+    //     'No camera is streaming images',
+    //     'stopImageStream was called when no camera is streaming images.',
+    //   );
+    // }
 
     try {
       value = value.copyWith(isStreamingImages: false);
@@ -445,7 +607,7 @@ class CameraController extends ValueNotifier<CameraValue> {
       throw CameraException(e.code, e.message);
     }
 
-    await _imageStreamSubscription.cancel();
+    await _imageStreamSubscription?.cancel();
     _imageStreamSubscription = null;
   }
 
@@ -564,6 +726,84 @@ class CameraController extends ValueNotifier<CameraValue> {
         'resumeVideoRecording',
         <String, dynamic>{'textureId': _textureId},
       );
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
+  }
+
+  /// Sets the auto focus and auto exposure point.
+  ///
+  /// Throws a [CameraException] if the call fails.
+  Future<Null> setPointOfInterest(Offset offset) async {
+    if (!value.isInitialized || _isDisposed) {
+      throw CameraException(
+        'Uninitialized CameraController.',
+        'setPointOfInterest was called on uninitialized CameraController',
+      );
+    }
+    try {
+      await _channel.invokeMethod(
+        'setPointOfInterest',
+        <String, dynamic>{'offsetX': offset.dx, 'offsetY': offset.dy},
+      );
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
+  }
+
+  /// Sets the flash on.
+  ///
+  /// Throws a [CameraException] if the call fails.
+  Future<Null> onFlash() async {
+    if (!value.isInitialized || _isDisposed) {
+      throw CameraException(
+        'Uninitialized CameraController.',
+        'onFlash was called on uninitialized CameraController',
+      );
+    }
+
+    if (isFlashOn) {
+      throw CameraException(
+        'Flash is already active',
+        'Flash is already active',
+      );
+    }
+
+    try {
+      await _channel.invokeMethod(
+        'startFlash',
+        <String, dynamic>{'textureId': _textureId},
+      );
+      this.isFlashOn = true;
+    } on PlatformException catch (e) {
+      throw CameraException(e.code, e.message);
+    }
+  }
+
+  /// Sets the flash off.
+  ///
+  /// Throws a [CameraException] if the call fails.
+  Future<Null> offFlash() async {
+    if (!value.isInitialized || _isDisposed) {
+      throw CameraException(
+        'Uninitialized CameraController.',
+        'onFlash was called on uninitialized CameraController',
+      );
+    }
+
+    if (!isFlashOn) {
+      throw CameraException(
+        'Flash is already OFF',
+        'Flash is already OFF',
+      );
+    }
+
+    try {
+      await _channel.invokeMethod(
+        'stopFlash',
+        <String, dynamic>{'textureId': _textureId},
+      );
+      this.isFlashOn = false;
     } on PlatformException catch (e) {
       throw CameraException(e.code, e.message);
     }

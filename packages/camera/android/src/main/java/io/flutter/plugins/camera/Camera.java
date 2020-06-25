@@ -69,6 +69,7 @@ public class Camera {
     veryHigh,
     ultraHigh,
     max,
+    photo
   }
 
   public Camera(
