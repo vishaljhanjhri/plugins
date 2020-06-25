@@ -435,16 +435,6 @@ class CameraController extends ValueNotifier<CameraValue> {
     }
 
     final size = MediaQuery.of(context).size;
-
-    // // calculate scale for aspect ratio widget
-    // var scale = this.value.aspectRatio / size.aspectRatio;
-    // print("---- scale $scale ++++ ${size.aspectRatio}");
-    // // check if adjustments are needed...
-    // if (this.value.aspectRatio < size.aspectRatio) {
-    //   scale = 1 / scale;
-    //   print("xxxxx scale $scale");
-    // }
-    // final deviceRatio = size.width / size.height;
     double scale = this.value.aspectRatio / size.aspectRatio;
     this.cameraPreviewScale = scale;
     // print(" ==== scale $scale");
@@ -455,7 +445,7 @@ class CameraController extends ValueNotifier<CameraValue> {
 
   Rect get getCropArea {
     CameraOverlaySizeResult _areaResult = cameraOverlaykey.currentState.cropArea;
-    return _areaResult?.getRect(this.value.previewSize) ?? Rect.zero;
+    return _areaResult?.getRect(this.value.previewSize, cameraPreviewScale) ?? Rect.zero;
   }
 
   /// Prepare the capture session for video recording.

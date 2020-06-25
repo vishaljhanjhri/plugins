@@ -336,7 +336,6 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
                            _captureDevice.activeFormat.highResolutionStillImageDimensions.height);
             break;
           }
-          
     default:
       if ([_captureSession canSetSessionPreset:AVCaptureSessionPresetLow]) {
         _captureSession.sessionPreset = AVCaptureSessionPresetLow;

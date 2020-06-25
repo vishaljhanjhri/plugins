@@ -29,26 +29,75 @@ class CameraOverlaySizeResult {
 
   CameraOverlaySizeResult(this.rect, this.forSize);
 
-  Rect getRect(Size newSize) {
-    // print("&&&&& forSize $forSize");
-    // print("&&&&& rect $rect");
-    // print("&&&&& rect.width ${rect.width}");
-    // print("&&&&& rect.height ${rect.height}");
-    // print("&&&&& newSize ${newSize}");
-    
-    double widthPadding = ((newSize.width - forSize.width) / 2);
-    // double hightPadding = ((newSize.width - forSize.width) / 2);
+//NOTE: Commecting code for infuture debug
+  Rect getRect(Size newSize, double scale) {
+    // print("&&&&& +++++++++++++++++++++++");
 
-    Rect newRect = Rect.fromLTWH(
-        (rect.left * forSize.width + widthPadding) / newSize.width,
+    // double aspectRatio = newSize.aspectRatio;
+    double scaledWidth = newSize.width / scale;
+    
+    // double widthPadding = ((newSize.width - forSize.width) / 2);
+    // double hightPadding = ((newSize.width - forSize.width) / 2);
+  //   print("&&&&& aspectRatio ${aspectRatio}");
+  //   print("&&&&& scale ${scale}");
+  //   print("&&&&& forSize $forSize");
+  //   print("&&&&& newSize ${newSize}");
+  //   print("&&&&& =======================");
+  //   print("&&&&& rect $rect");
+  //   print("&&&&& rect.width ${rect.width}");
+  //   print("&&&&& rect.height ${rect.height}");
+  //   print("&&&&& rect.left ${rect.left}");
+    
+
+  //   Rect newRect = Rect.fromLTWH(
+  //       (rect.left * forSize.width + widthPadding) / newSize.width,
+  //       (rect.top),
+  //       (rect.width * forSize.width) / newSize.width,
+  //       (rect.height));
+
+  //   Rect rect2 = Rect.fromLTWH(
+  //       (rect.left * scale),
+  //       (rect.top),
+  //       (rect.width / scale) ,
+  //       (rect.height));
+  //  double l = rect.left * aspectRatio;
+  //   Rect rect3 = Rect.fromLTWH(
+  //       l,
+  //       (rect.top),
+  //       (1 - (2 * l)) ,
+        // (rect.height));
+
+    double r4WidthPadding = (newSize.width - scaledWidth) / 2;
+    Rect r4 = Rect.fromLTWH(
+        (rect.left * scaledWidth + r4WidthPadding) / newSize.width,
         (rect.top),
-        (rect.width * forSize.width) / newSize.width,
+        (rect.width * scaledWidth) / newSize.width,
         (rect.height));
+
+    // print("&&&&& =======================");
     // print("&&&&& newRect ${newRect}");
+    // print("&&&&& newRect.left ${newRect.left}");
     // print("&&&&& newRect.height ${newRect.height}");
     // print("&&&&& newRect.width ${newRect.width}");
+    // print("&&&&& =======================");
+    // print("&&&&& rect2 ${rect2}");
+    // print("&&&&& rect2.left ${rect2.left}");
+    // print("&&&&& rect2.height ${rect2.height}");
+    // print("&&&&& rect2.width ${rect2.width}");
+    // print("&&&&& =======================");
+    // print("&&&&& rect3 ${rect3}");
+    // print("&&&&& rect3.left ${rect3.left}");
+    // print("&&&&& rect3.height ${rect3.height}");
+    // print("&&&&& rect3.width ${rect3.width}");
+    // print("&&&&& =======================");
+    // print("&&&&& r4 ${r4}");
+    // print("&&&&& r4.left ${r4.left}");
+    // print("&&&&& r4.height ${r4.height}");
+    // print("&&&&& r4.width ${r4.width}");
+    // print("&&&&& +++++++++++++++++++++++");
 
-    return newRect;
+
+    return r4;
   }
 }
 
